@@ -1,0 +1,326 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#111;font-family:system-ui,sans-serif;color:#e8e8e8;}
+#wrap{max-width:480px;margin:0 auto;padding:20px;}
+.card{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;padding:16px;margin-bottom:12px;}
+.lbl{font-size:11px;color:#666;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:6px;}
+.inp{width:100%;background:#111;border:1px solid #2a2a2a;border-radius:8px;color:#e8e8e8;font-size:14px;padding:8px 10px;outline:none;}
+.inp:focus{border-color:#2dd4bf;}
+.tag{background:#0f2e2b;color:#2dd4bf;font-size:11px;padding:2px 8px;border-radius:4px;}
+.rtag{background:#1a1a2e;color:#818cf8;font-size:11px;padding:2px 8px;border-radius:4px;}
+.nav{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;padding:4px;margin-bottom:16px;}
+.navbtn{padding:9px 4px;border-radius:7px;border:none;background:transparent;color:#e8e8e8;font-size:13px;font-weight:500;cursor:pointer;text-align:center;}
+.navbtn.on{background:#2dd4bf;color:#111;font-weight:600;}
+.actn{width:100%;padding:10px;border-radius:8px;border:none;background:#2dd4bf;color:#111;font-size:14px;font-weight:500;cursor:pointer;margin-top:4px;}
+.ghost{width:auto;padding:6px 12px;border-radius:8px;border:1px solid #2a2a2a;background:transparent;color:#e8e8e8;font-size:12px;cursor:pointer;}
+.row{display:flex;justify-content:space-between;align-items:center;}
+.bar-wrap{background:#222;height:6px;border-radius:99px;overflow:hidden;margin:8px 0 4px;}
+.bar{height:6px;border-radius:99px;transition:width 0.3s;}
+.delbtn{background:none;border:none;color:#555;font-size:14px;cursor:pointer;}
+.delbtn:hover{color:#f87171;}
+.screen{display:none;}
+.screen.on{display:block;}
+.toggle{display:flex;gap:0;background:#111;border:1px solid #2a2a2a;border-radius:8px;overflow:hidden;margin-bottom:12px;}
+.togglebtn{flex:1;padding:8px;border:none;background:transparent;color:#888;font-size:13px;cursor:pointer;}
+.togglebtn.on{background:#2a2a2a;color:#e8e8e8;}
+</style>
+
+<div id="wrap">
+  <div class="row" style="margin-bottom:16px;">
+    <span style="font-size:16px;font-weight:500;color:#e8e8e8;">Budget tracker</span>
+    <button class="ghost" onclick="openSettings()">Settings</button>
+  </div>
+  <div class="nav">
+    <button class="navbtn on" id="n0" onclick="go(0)">Overview</button>
+    <button class="navbtn" id="n1" onclick="go(1)">Budget</button>
+    <button class="navbtn" id="n2" onclick="go(2)">Log</button>
+    <button class="navbtn" id="n3" onclick="go(3)">History</button>
+  </div>
+  <div class="screen on" id="s0"></div>
+  <div class="screen" id="s1"></div>
+  <div class="screen" id="s2"></div>
+  <div class="screen" id="s3"></div>
+  <div id="modal"></div>
+</div>
+
+<script>
+const C=[
+  {k:'investing',n:'Investing'},
+  {k:'savings',n:'Savings'},
+  {k:'emergency',n:'Emergency fund'},
+  {k:'spending',n:'Spending'},
+];
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+let D={
+  inc:0,incS:'',
+  pct:{investing:20,savings:20,emergency:10,spending:50},
+  goals:{investing:0,savings:0,emergency:0,spending:0},
+  txns:[],hist:[],
+  recurring:[],
+  tPct:{},tGoals:{},
+  logTab:'one',
+};
+let cur=0;
+
+const al=k=>D.inc*D.pct[k]/100;
+const sp=k=>D.txns.filter(t=>t.k===k).reduce((a,t)=>a+t.amt,0);
+const re=k=>al(k)-sp(k);
+const tsp=()=>D.txns.reduce((a,t)=>a+t.amt,0);
+
+function go(i){
+  cur=i;
+  for(let j=0;j<4;j++){
+    document.getElementById('n'+j).className='navbtn'+(j===i?' on':'');
+    document.getElementById('s'+j).className='screen'+(j===i?' on':'');
+  }
+  draw(i);
+}
+function draw(i){
+  if(i===0)drawOverview();
+  if(i===1)drawBudget();
+  if(i===2)drawLog();
+  if(i===3)drawHist();
+}
+
+function drawOverview(){
+  const ts=tsp(),ta=D.inc,lft=ta-ts;
+  const max=Math.max(...C.map(c=>al(c.k)),1);
+  const bars=C.map(c=>{
+    const a=al(c.k),s=sp(c.k),r=re(c.k),over=s>a;
+    const aw=a>0?(a/max*100):0,sw=a>0?Math.min(s/max*100,aw):0;
+    return `<div style="margin-bottom:14px;">
+      <div class="row" style="margin-bottom:6px;">
+        <span style="font-size:13px;font-weight:500;color:#e8e8e8;">${c.n}</span>
+        <span style="font-size:12px;color:${over?'#f87171':'#888'};">$${s.toFixed(0)} / <span style="color:#e8e8e8;">$${a.toFixed(0)}</span></span>
+      </div>
+      <div class="bar-wrap"><div style="position:relative;height:6px;">
+        <div style="position:absolute;width:${aw.toFixed(1)}%;height:6px;background:#2a2a2a;border-radius:99px;"></div>
+        <div style="position:absolute;width:${sw.toFixed(1)}%;height:6px;background:${over?'#f87171':'#2dd4bf'};border-radius:99px;"></div>
+      </div></div>
+      <div style="font-size:11px;color:${r<0?'#f87171':'#555'};text-align:right;">${r<0?'$'+Math.abs(r).toFixed(2)+' over':'$'+r.toFixed(2)+' left'}</div>
+    </div>`;
+  }).join('');
+  const recent=!D.txns.length?`<div style="font-size:13px;color:#555;">No transactions yet</div>`:
+    [...D.txns].reverse().slice(0,4).map(t=>{
+      const cat=C.find(c=>c.k===t.k);
+      return `<div class="row" style="padding:7px 0;border-bottom:1px solid #222;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:13px;color:#e8e8e8;">${cat.n}${t.note?` <span style="color:#555;">· ${t.note}</span>`:''}</span>
+          ${t.recurring?`<span class="rtag">monthly</span>`:''}
+        </div>
+        <span style="color:#f87171;font-size:13px;">-$${t.amt.toFixed(2)}</span>
+      </div>`;
+    }).join('');
+  document.getElementById('s0').innerHTML=`
+    <div class="card">
+      <div class="lbl">Total income</div>
+      <div style="font-size:28px;font-weight:500;color:#e8e8e8;margin-bottom:4px;">$${ta.toFixed(2)}</div>
+      <div style="font-size:13px;color:#888;">$${ts.toFixed(2)} spent &nbsp;·&nbsp; <span style="color:${lft<0?'#f87171':'#2dd4bf'};">$${lft.toFixed(2)} remaining</span></div>
+    </div>
+    <div class="card">
+      <div class="lbl" style="margin-bottom:14px;">Allocated vs spent</div>
+      ${bars}
+      <div style="display:flex;gap:14px;padding-top:10px;border-top:1px solid #222;">
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:#888;"><div style="width:8px;height:8px;border-radius:2px;background:#2a2a2a;border:1px solid #444;"></div>Allocated</div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:#888;"><div style="width:8px;height:8px;border-radius:2px;background:#2dd4bf;"></div>Spent</div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:#888;"><div style="width:8px;height:8px;border-radius:2px;background:#f87171;"></div>Over</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="lbl" style="margin-bottom:10px;">Recent activity</div>
+      ${recent}
+    </div>`;
+}
+
+function drawBudget(){
+  document.getElementById('s1').innerHTML=`
+    <div class="card">
+      <div class="lbl">Income</div>
+      <div style="display:flex;align-items:baseline;gap:6px;background:#111;border:1px solid #2a2a2a;border-radius:8px;padding:10px 12px;margin-top:4px;">
+        <span style="font-size:22px;color:#555;">$</span>
+        <input id="incf" type="number" placeholder="Enter your income" value="${D.incS}" style="font-size:26px;font-weight:500;border:none;background:transparent;color:#e8e8e8;outline:none;width:100%;caret-color:#2dd4bf;" />
+      </div>
+    </div>
+    ${C.map(c=>{
+      const a=al(c.k),s=sp(c.k),r=re(c.k),bar=a>0?Math.min(s/a*100,100):0,g=D.goals[c.k];
+      return `<div class="card" style="margin-bottom:8px;">
+        <div class="row" style="margin-bottom:10px;">
+          <span style="font-size:14px;font-weight:500;color:#e8e8e8;">${c.n}</span>
+          <span class="tag">${D.pct[c.k]}%</span>
+        </div>
+        <div class="row" style="font-size:13px;color:#888;margin-bottom:8px;">
+          <span>Allocated <span style="color:#e8e8e8;font-weight:500;">$${a.toFixed(2)}</span></span>
+          <span>Left <span style="color:${r<0?'#f87171':'#2dd4bf'};font-weight:500;">$${r.toFixed(2)}</span></span>
+        </div>
+        <div class="bar-wrap"><div class="bar" style="width:${bar.toFixed(1)}%;background:${r<0?'#f87171':'#2dd4bf'};"></div></div>
+        ${g>0?`<div style="font-size:11px;color:#555;margin-top:4px;">Goal $${g} · <span style="color:${s>=g?'#2dd4bf':'#888'}">${s>=g?'Reached!':'$'+(g-s).toFixed(2)+' to go'}</span></div>`:''}
+      </div>`;
+    }).join('')}
+    <button class="actn" onclick="archiveMonth()">Archive this month</button>`;
+  document.getElementById('incf').addEventListener('input',function(){
+    D.incS=this.value;D.inc=parseFloat(this.value)||0;drawBudget();
+  });
+}
+
+function drawLog(){
+  const isOne=D.logTab==='one';
+  document.getElementById('s2').innerHTML=`
+    <div class="toggle">
+      <button class="togglebtn${isOne?' on':''}" onclick="switchLogTab('one')">One-time</button>
+      <button class="togglebtn${!isOne?' on':''}" onclick="switchLogTab('recurring')">Recurring</button>
+    </div>
+
+    ${isOne?`
+    <div class="card" style="margin-bottom:12px;">
+      <div class="lbl" style="margin-bottom:12px;">New transaction</div>
+      <select class="inp" id="sel" style="margin-bottom:8px;">${C.map(c=>`<option value="${c.k}">${c.n}</option>`).join('')}</select>
+      <input class="inp" type="number" id="amt" placeholder="Amount ($)" style="margin-bottom:8px;" />
+      <input class="inp" type="text" id="note" placeholder="Note (optional)" style="margin-bottom:12px;" />
+      <button class="actn" onclick="addT()">Add transaction</button>
+    </div>`:`
+    <div class="card" style="margin-bottom:12px;">
+      <div class="lbl" style="margin-bottom:12px;">New recurring transaction</div>
+      <select class="inp" id="rsel" style="margin-bottom:8px;">${C.map(c=>`<option value="${c.k}">${c.n}</option>`).join('')}</select>
+      <input class="inp" type="number" id="ramt" placeholder="Amount ($)" style="margin-bottom:8px;" />
+      <input class="inp" type="text" id="rnote" placeholder="Name (e.g. Rent)" style="margin-bottom:12px;" />
+      <button class="actn" onclick="addRecurring()">Add recurring</button>
+    </div>
+    <div class="card" style="margin-bottom:12px;">
+      <div class="lbl" style="margin-bottom:10px;">Monthly recurring</div>
+      ${!D.recurring.length?`<div style="font-size:13px;color:#555;">No recurring transactions yet</div>`:''}
+      ${D.recurring.map(r=>{
+        const cat=C.find(c=>c.k===r.k);
+        return `<div class="row" style="padding:8px 0;border-bottom:1px solid #222;">
+          <div>
+            <span style="font-size:13px;font-weight:500;color:#e8e8e8;">${r.note||cat.n}</span>
+            <span class="rtag" style="margin-left:6px;">monthly</span>
+            <div style="font-size:12px;color:#555;margin-top:2px;">${cat.n}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="color:#f87171;font-size:13px;font-weight:500;">-$${r.amt.toFixed(2)}</span>
+            <button class="delbtn" onclick="delRecurring(${r.id})">✕</button>
+          </div>
+        </div>`;
+      }).join('')}
+      ${D.recurring.length?`
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid #222;" class="row">
+        <span style="font-size:12px;color:#666;">Monthly total</span>
+        <span style="font-size:13px;font-weight:500;color:#f87171;">-$${D.recurring.reduce((a,r)=>a+r.amt,0).toFixed(2)}</span>
+      </div>
+      <button class="actn" style="margin-top:12px;" onclick="applyRecurring()">Apply all to this month</button>`:''}
+    </div>`}
+
+    <div class="card">
+      <div class="lbl" style="margin-bottom:10px;">All transactions</div>
+      ${!D.txns.length?`<div style="font-size:13px;color:#555;">No transactions yet</div>`:''}
+      ${[...D.txns].reverse().map(t=>{
+        const cat=C.find(c=>c.k===t.k);
+        return `<div class="row" style="padding:8px 0;border-bottom:1px solid #222;">
+          <div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="font-size:13px;font-weight:500;color:#e8e8e8;">${cat.n}</span>
+              ${t.recurring?`<span class="rtag">monthly</span>`:''}
+            </div>
+            ${t.note?`<div style="font-size:12px;color:#555;margin-top:2px;">${t.note}</div>`:''}
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="color:#f87171;font-size:13px;font-weight:500;">-$${t.amt.toFixed(2)}</span>
+            <button class="delbtn" onclick="delT(${t.id})">✕</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+function drawHist(){
+  const el=document.getElementById('s3');
+  if(!D.hist.length){el.innerHTML=`<div class="card"><div style="font-size:13px;color:#555;">No archived months yet. Archive a month in the Budget tab.</div></div>`;return;}
+  el.innerHTML=D.hist.map(m=>`
+    <div class="card" style="margin-bottom:12px;">
+      <div class="row" style="margin-bottom:12px;">
+        <span style="font-size:15px;font-weight:500;color:#e8e8e8;">${m.label}</span>
+        <span style="font-size:13px;color:#888;">$${m.inc.toFixed(2)}</span>
+      </div>
+      ${C.map(c=>{
+        const s=m.sp[c.k]||0,a=m.al[c.k]||0,r=a-s,bar=a>0?Math.min(s/a*100,100):0;
+        return `<div style="margin-bottom:10px;">
+          <div class="row" style="font-size:13px;margin-bottom:4px;">
+            <span style="color:#888;">${c.n}</span>
+            <span style="color:${r<0?'#f87171':'#2dd4bf'};">$${r.toFixed(2)} left</span>
+          </div>
+          <div class="bar-wrap"><div class="bar" style="width:${bar.toFixed(1)}%;background:#2dd4bf;"></div></div>
+        </div>`;
+      }).join('')}
+    </div>`).join('');
+}
+
+function switchLogTab(t){D.logTab=t;drawLog();}
+
+function addT(){
+  const a=parseFloat(document.getElementById('amt').value);
+  if(!a||a<=0)return;
+  D.txns.push({k:document.getElementById('sel').value,amt:a,note:document.getElementById('note').value,id:Date.now(),recurring:false});
+  drawLog();if(cur===0)drawOverview();
+}
+
+function addRecurring(){
+  const a=parseFloat(document.getElementById('ramt').value);
+  if(!a||a<=0)return;
+  D.recurring.push({k:document.getElementById('rsel').value,amt:a,note:document.getElementById('rnote').value,id:Date.now()});
+  drawLog();
+}
+
+function applyRecurring(){
+  D.recurring.forEach(r=>{
+    D.txns.push({k:r.k,amt:r.amt,note:r.note,id:Date.now()+Math.random(),recurring:true});
+  });
+  drawLog();if(cur===0)drawOverview();
+}
+
+function delRecurring(id){D.recurring=D.recurring.filter(r=>r.id!==id);drawLog();}
+function delT(id){D.txns=D.txns.filter(t=>t.id!==id);drawLog();if(cur===0)drawOverview();}
+
+function archiveMonth(){
+  const now=new Date(),sp2={},al2={};
+  C.forEach(c=>{sp2[c.k]=sp(c.k);al2[c.k]=al(c.k);});
+  D.hist.unshift({label:MON[now.getMonth()]+' '+now.getFullYear(),inc:D.inc,sp:sp2,al:al2});
+  D.txns=[];D.inc=0;D.incS='';go(3);
+}
+
+function openSettings(){
+  D.tPct={...D.pct};D.tGoals={...D.goals};
+  document.getElementById('modal').innerHTML=`
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;z-index:99;" onclick="closeM(event)">
+      <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:12px;padding:24px;width:300px;max-height:88vh;overflow-y:auto;" onclick="event.stopPropagation()">
+        <div style="font-size:15px;font-weight:500;color:#e8e8e8;margin-bottom:16px;">Settings</div>
+        <div class="lbl" style="margin-bottom:10px;">Percentages <span id="ptot" style="color:#2dd4bf;">(${Object.values(D.tPct).reduce((a,b)=>a+b,0)}%)</span></div>
+        ${C.map(c=>`<div class="row" style="margin-bottom:10px;">
+          <span style="font-size:13px;color:#e8e8e8;">${c.n}</span>
+          <input class="inp" type="number" value="${D.tPct[c.k]}" oninput="D.tPct['${c.k}']=parseInt(this.value)||0;updT()" style="width:64px;text-align:center;" />
+        </div>`).join('')}
+        <div class="lbl" style="margin-top:14px;margin-bottom:10px;">Savings goals</div>
+        ${C.map(c=>`<div class="row" style="margin-bottom:10px;">
+          <span style="font-size:13px;color:#e8e8e8;">${c.n}</span>
+          <input class="inp" type="number" placeholder="0" value="${D.tGoals[c.k]||''}" oninput="D.tGoals['${c.k}']=parseFloat(this.value)||0" style="width:80px;text-align:center;" />
+        </div>`).join('')}
+        <div style="display:flex;gap:8px;margin-top:16px;">
+          <button class="ghost" style="flex:1;width:auto;padding:10px;" onclick="closeM()">Cancel</button>
+          <button class="actn" onclick="saveS()" style="flex:1;margin-top:0;">Save</button>
+        </div>
+      </div>
+    </div>`;
+}
+function updT(){
+  const t=Object.values(D.tPct).reduce((a,b)=>a+b,0);
+  const el=document.getElementById('ptot');
+  if(el){el.textContent=`(${t}%)`;el.style.color=t===100?'#2dd4bf':'#f87171';}
+}
+function closeM(e){if(!e||e.target===e.currentTarget){document.getElementById('modal').innerHTML='';}}
+function saveS(){
+  if(Object.values(D.tPct).reduce((a,b)=>a+b,0)!==100){alert('Must total 100%');return;}
+  D.pct={...D.tPct};D.goals={...D.tGoals};
+  document.getElementById('modal').innerHTML='';draw(cur);
+}
+draw(0);
+</script>
